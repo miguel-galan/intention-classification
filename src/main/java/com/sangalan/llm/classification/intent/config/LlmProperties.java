@@ -25,6 +25,12 @@ public class LlmProperties {
 
     private int timeoutMs = 30000;
 
+    private String apiKey;
+
+    private String authHeader = "Authorization";
+
+    private String authScheme = "Bearer";
+
     private String defaultOption = "UNKNOWN";
 
     private List<String> options = new ArrayList<>();
@@ -73,6 +79,36 @@ public class LlmProperties {
 
     public void setTimeoutMs(int timeoutMs) {
         this.timeoutMs = timeoutMs;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
+
+    public String getAuthHeader() {
+        if (authHeader == null || authHeader.isBlank()) {
+            return "Authorization";
+        }
+        return authHeader;
+    }
+
+    public void setAuthHeader(String authHeader) {
+        this.authHeader = authHeader;
+    }
+
+    public String getAuthScheme() {
+        if (authScheme == null) {
+            return "";
+        }
+        return authScheme;
+    }
+
+    public void setAuthScheme(String authScheme) {
+        this.authScheme = authScheme;
     }
 
     public String getDefaultOption() {
@@ -139,5 +175,16 @@ public class LlmProperties {
         return fewShots.stream()
                 .filter(example -> example != null && example.getIntent() != null)
                 .allMatch(example -> allowedIntentNames.contains(example.getIntent()));
+    }
+
+    public String buildAuthorizationValue() {
+        if (apiKey == null || apiKey.isBlank()) {
+            return null;
+        }
+        String normalizedScheme = getAuthScheme().trim();
+        if (normalizedScheme.isEmpty()) {
+            return apiKey;
+        }
+        return normalizedScheme + " " + apiKey;
     }
 }

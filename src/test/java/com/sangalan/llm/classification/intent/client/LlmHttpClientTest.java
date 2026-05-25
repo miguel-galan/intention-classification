@@ -11,6 +11,7 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LlmHttpClientTest {
@@ -47,9 +48,106 @@ class LlmHttpClientTest {
             assertEquals("POST", request.getMethod());
             assertEquals("/v1/chat/completions", request.getPath());
             assertEquals("application/json", request.getHeader("Content-Type"));
+            assertNull(request.getHeader("Authorization"));
             String body = request.getBody().readUtf8();
             assertTrue(body.contains("\"model\":\"qwen2.5:7b\""));
             assertTrue(body.contains("\"content\":\"Prompt content\""));
+        }
+    }
+
+    @Test
+    void ignoresUnknownChoiceFieldsAndCanReadTextFallback() throws IOException {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .addHeader("Content-Type", "application/json")
+                    .setBody("""
+                            {
+                              "choices": [
+                                {
+                                  "finish_reason": "stop",
+                                  "text": "SEARCH_DOCUMENTS"
+                                }
+                              ]
+                            }
+                            """));
+            server.start();
+
+            LlmProperties properties = TestFixtures.properties();
+            properties.setUrl(server.url("/v1/chat/completions").toString());
+            LlmHttpClient client = new LlmHttpClient(properties);
+
+            String response = client.sendPrompt("Prompt content");
+
+            assertEquals("SEARCH_DOCUMENTS", response);
+        }
+    }
+
+    @Test
+    void sendsDefaultBearerAuthorizationHeaderWhenApiKeyConfigured() throws IOException, InterruptedException {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .addHeader("Content-Type", "application/json")
+                    .setBody("""
+                            {
+                              "choices": [
+                                {
+                                  "message": {
+                                    "role": "assistant",
+                                    "content": "SEARCH_DOCUMENTS"
+                                  }
+                                }
+                              ]
+                            }
+                            """));
+            server.start();
+
+            LlmProperties properties = TestFixtures.properties();
+            properties.setUrl(server.url("/v1/chat/completions").toString());
+            properties.setApiKey("secret-key");
+            LlmHttpClient client = new LlmHttpClient(properties);
+
+            client.sendPrompt("Prompt content");
+
+            RecordedRequest request = server.takeRequest();
+            assertNotNull(request);
+            assertEquals("Bearer secret-key", request.getHeader("Authorization"));
+        }
+    }
+
+    @Test
+    void sendsCustomAuthorizationHeaderAndSchemeWhenConfigured() throws IOException, InterruptedException {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse()
+                    .setResponseCode(200)
+                    .addHeader("Content-Type", "application/json")
+                    .setBody("""
+                            {
+                              "choices": [
+                                {
+                                  "message": {
+                                    "role": "assistant",
+                                    "content": "SEARCH_DOCUMENTS"
+                                  }
+                                }
+                              ]
+                            }
+                            """));
+            server.start();
+
+            LlmProperties properties = TestFixtures.properties();
+            properties.setUrl(server.url("/v1/chat/completions").toString());
+            properties.setApiKey("provider-key");
+            properties.setAuthHeader("X-API-Key");
+            properties.setAuthScheme("");
+            LlmHttpClient client = new LlmHttpClient(properties);
+
+            client.sendPrompt("Prompt content");
+
+            RecordedRequest request = server.takeRequest();
+            assertNotNull(request);
+            assertEquals("provider-key", request.getHeader("X-API-Key"));
         }
     }
 }

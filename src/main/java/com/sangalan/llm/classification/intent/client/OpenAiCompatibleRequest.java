@@ -1,5 +1,7 @@
 package com.sangalan.llm.classification.intent.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.List;
 
 public class OpenAiCompatibleRequest {
@@ -41,6 +43,7 @@ public class OpenAiCompatibleRequest {
         this.messages = messages;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Message {
 
         private String role;

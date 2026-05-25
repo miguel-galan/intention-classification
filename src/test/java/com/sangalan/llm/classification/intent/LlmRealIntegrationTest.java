@@ -1,86 +1,59 @@
 package com.sangalan.llm.classification.intent;
 
-import com.sangalan.llm.classification.intent.client.LlmHttpClient;
-import com.sangalan.llm.classification.intent.config.LlmProperties;
+import com.sangalan.llm.classification.intent.autoconfigure.LlmAutoConfiguration;
 import com.sangalan.llm.classification.intent.model.IntentClassificationResult;
-import com.sangalan.llm.classification.intent.service.IntentPromptBuilder;
-import com.sangalan.llm.classification.intent.service.IntentResponseParser;
-import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
+import java.time.Duration;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SpringBootTest(classes = LlmAutoConfiguration.class)
+@TestPropertySource("classpath:application-integration.properties")
 class LlmRealIntegrationTest {
 
-    @Test
-    void classifiesAgainstRealLlmRunnerWhenEnabled() throws IOException {
-        Properties props = loadIntegrationProperties();
-        boolean enabled = Boolean.parseBoolean(readProperty("llm.integration.enabled", props, "false"));
-        Assumptions.assumeTrue(enabled, "Real LLM integration test is disabled. Set llm.integration.enabled=true.");
+    @Autowired
+    private Llm llm;
 
-        LlmProperties llmProperties = TestFixtures.taskProperties();
-        llmProperties.setUrl(readProperty("llm.integration.url", props, llmProperties.getUrl()));
-        llmProperties.setModel(readProperty("llm.integration.model", props, llmProperties.getModel()));
-        llmProperties.setSystemPrompt(readProperty("llm.integration.system-prompt", props, llmProperties.getSystemPrompt()));
-        llmProperties.setTimeoutMs(Integer.parseInt(readProperty(
-                "llm.integration.timeout-ms",
-                props,
-                String.valueOf(llmProperties.getTimeoutMs())
-        )));
+    private String userPrompt;
 
-        String userPrompt = readProperty(
+    @BeforeEach
+    void setup() {
+        userPrompt = System.getProperty(
                 "llm.integration.user-prompt",
-                props,
-                "List all the tasks with status pending to the user Maria"
+                System.getenv().getOrDefault(
+                        "LLM_INTEGRATION_USER_PROMPT",
+                        "Lista todas las tareas expiradas de Carlos"
+                )
         );
+    }
 
-        Llm llm = new Llm(
-                llmProperties,
-                new LlmHttpClient(llmProperties),
-                new IntentPromptBuilder(llmProperties),
-                new IntentResponseParser(llmProperties)
-        );
-
+    @Tag("integration")
+    @Test
+    void classifiesAgainstRealLlmRunner() {
+        Instant start = Instant.now();
         IntentClassificationResult result = llm.classifyIntent(userPrompt);
+        Duration elapsed = Duration.between(start, Instant.now());
 
         assertNotNull(result);
-        assertTrue(llmProperties.getAllowedIntentNames().contains(result.intent()));
+        assertTrue(llm.getProperties().getAllowedIntentNames().contains(result.intent()));
         assertNotNull(result.parameters());
+
+        long totalMillis = elapsed.toMillis();
+        long minutes = totalMillis / 60000;
+        long seconds = (totalMillis % 60000) / 1000;
+        double totalSeconds = totalMillis / 1000.0;
 
         System.out.println("Prompt: " + userPrompt);
         System.out.println("Intent: " + result.intent());
         System.out.println("Parameters: " + result.parameters());
-    }
-
-    private Properties loadIntegrationProperties() throws IOException {
-        Properties properties = new Properties();
-        try (InputStream inputStream = getClass().getClassLoader()
-                .getResourceAsStream("application-integration.properties")) {
-            if (inputStream != null) {
-                properties.load(inputStream);
-            }
-        }
-        return properties;
-    }
-
-    private String readProperty(String key, Properties fileProperties, String defaultValue) {
-        String systemValue = System.getProperty(key);
-        if (systemValue != null && !systemValue.isBlank()) {
-            return systemValue;
-        }
-        String envValue = System.getenv(toEnvKey(key));
-        if (envValue != null && !envValue.isBlank()) {
-            return envValue;
-        }
-        return fileProperties.getProperty(key, defaultValue);
-    }
-
-    private String toEnvKey(String key) {
-        return key.toUpperCase().replace('.', '_').replace('-', '_');
+        System.out.printf("Elapsed: %dm %ds (%.3f s)%n", minutes, seconds, totalSeconds);
     }
 }

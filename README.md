@@ -69,6 +69,9 @@ sangalan.classify.llm.model=qwen2.5:7b
 sangalan.classify.llm.system-prompt=You are an intent classification assistant. Your task is to classify the user request into exactly one of the allowed intent options.
 sangalan.classify.llm.temperature=0
 sangalan.classify.llm.timeout-ms=30000
+sangalan.classify.llm.api-key=
+sangalan.classify.llm.auth-header=Authorization
+sangalan.classify.llm.auth-scheme=Bearer
 sangalan.classify.llm.default-option=UNKNOWN
 
 sangalan.classify.llm.options[0]=SEARCH_DOCUMENTS
@@ -79,6 +82,88 @@ sangalan.classify.llm.options[3]=UNKNOWN
 sangalan.classify.llm.few-shots[0].user=Find all documents approved by Pepe last week
 sangalan.classify.llm.few-shots[0].intent=SEARCH_DOCUMENTS
 ```
+
+### API Key Authentication (Cloud Providers)
+
+The library supports optional API key auth for OpenAI-compatible cloud endpoints.
+
+Default behavior uses:
+
+- Header: `Authorization`
+- Scheme: `Bearer`
+- Value: `Bearer <api-key>`
+
+Example:
+
+```properties
+sangalan.classify.llm.url=https://your-provider.example/v1/chat/completions
+sangalan.classify.llm.model=gpt-4o-mini
+sangalan.classify.llm.api-key=${LLM_API_KEY}
+sangalan.classify.llm.auth-header=Authorization
+sangalan.classify.llm.auth-scheme=Bearer
+```
+
+For providers that require custom headers:
+
+```properties
+sangalan.classify.llm.url=https://your-provider.example/v1/chat/completions
+sangalan.classify.llm.model=provider-model
+sangalan.classify.llm.api-key=${LLM_API_KEY}
+sangalan.classify.llm.auth-header=X-API-Key
+sangalan.classify.llm.auth-scheme=
+```
+
+When `auth-scheme` is empty, the library sends the raw API key as the header value.
+
+### Ollama (OpenAI-Compatible Endpoint)
+
+```yaml
+sangalan:
+  classify:
+    llm:
+      url: "http://localhost:11434/v1/chat/completions"
+      model: "qwen2.5:7b"
+      system-prompt: >
+        You classify task-management user requests and return JSON with intent and parameters.
+      temperature: 0
+      timeout-ms: 120000
+      default-option: "UNKNOWN"
+      options:
+        - LIST_USERS_WITH_ACTIVE_TASKS
+        - LIST_TASKS_EXPIRING_IN_DAYS
+        - LIST_TOP_DOCUMENTS_IN_TASKS
+        - LIST_EXPIRED_TASKS
+        - LIST_LAST_ASSIGNED_TASKS
+        - LIST_TASKS_ASSIGNED_TO_USER
+        - LIST_TASKS_BY_STATUS_AND_USER
+        - UNKNOWN
+```
+
+### LM Studio (OpenAI-Compatible Endpoint)
+
+```yaml
+sangalan:
+  classify:
+    llm:
+      url: "http://localhost:1234/v1/chat/completions"
+      model: "qwen2.5-7b-instruct"
+      system-prompt: >
+        You classify task-management user requests and return JSON with intent and parameters.
+      temperature: 0
+      timeout-ms: 120000
+      default-option: "UNKNOWN"
+      options:
+        - LIST_USERS_WITH_ACTIVE_TASKS
+        - LIST_TASKS_EXPIRING_IN_DAYS
+        - LIST_TOP_DOCUMENTS_IN_TASKS
+        - LIST_EXPIRED_TASKS
+        - LIST_LAST_ASSIGNED_TASKS
+        - LIST_TASKS_ASSIGNED_TO_USER
+        - LIST_TASKS_BY_STATUS_AND_USER
+        - UNKNOWN
+```
+
+Both examples assume the OpenAI-compatible `/v1/chat/completions` route.
 
 ## Intent Options With Parameters
 
@@ -172,7 +257,7 @@ The project includes a real integration test:
 
 - [LlmRealIntegrationTest.java](/Users/miguel/Projects/sangalan/git/llm/intent-classification/src/test/java/com/sangalan/llm/classification/intent/LlmRealIntegrationTest.java)
 
-By default it is disabled. Enable it only when your model runner is up.
+By default, `mvn test` excludes integration-tagged tests.
 
 Configuration template:
 
@@ -184,16 +269,24 @@ Configuration template:
 2. In Run Configuration, set VM options, for example:
 
 ```text
--Dllm.integration.enabled=true
--Dllm.integration.url=http://localhost:12434/engines/llama.cpp/v1/chat/completions
--Dllm.integration.model=qwen2.5:7b
+-Dsangalan.classify.llm.url=http://localhost:12434/engines/llama.cpp/v1/chat/completions
+-Dsangalan.classify.llm.model=qwen2.5:7b
+-Dsangalan.classify.llm.timeout-ms=120000
+-Dsangalan.classify.llm.api-key=${LLM_API_KEY}
 -Dllm.integration.user-prompt=List all the tasks with status pending to the user Maria
+```
+
+### Run from Maven
+
+```text
+mvn test -Dgroups=integration
 ```
 
 You can also set env vars with the same keys uppercased and with `_`, for example:
 
 ```text
-LLM_INTEGRATION_ENABLED=true
-LLM_INTEGRATION_URL=http://localhost:12434/engines/llama.cpp/v1/chat/completions
-LLM_INTEGRATION_MODEL=qwen2.5:7b
+SANGALAN_CLASSIFY_LLM_URL=http://localhost:12434/engines/llama.cpp/v1/chat/completions
+SANGALAN_CLASSIFY_LLM_MODEL=qwen2.5:7b
+SANGALAN_CLASSIFY_LLM_API_KEY=your_api_key
+LLM_INTEGRATION_USER_PROMPT=List all the tasks with status pending to the user Maria
 ```
